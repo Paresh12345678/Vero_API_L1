@@ -1,127 +1,79 @@
 # Questions
 
-Answer each question in your own words. Aim for three to eight sentences per answer —
-enough to show that you understand the concept, not so much that you are restating a
-textbook entry. We are looking for clarity of thinking, not exhaustive coverage.
-
----
-
 ## Java & Object-Oriented Design
 
-**1.** The `Auditable` abstract class in this codebase uses `@MappedSuperclass`. Explain
-what this annotation tells JPA, and describe what would happen to the database schema if
-you removed it. Why is it better to put `createdAt` and `updatedAt` in a shared abstract
-class rather than adding those fields directly to `Transaction` and `Account` separately?
+### 1.
 
+`@MappedSuperclass` tells JPA that the fields in the parent class should be inherited by entity classes and mapped into their database tables. If it were removed, the inherited fields would not be automatically mapped. Using a shared Auditable class avoids code duplication and ensures consistency across multiple entities.
 
+### 2.
 
-**2.** `TransactionService` is defined as a Java interface, with `TransactionServiceImpl`
-as its only implementation. A new engineer on the team asks: "Why bother with the interface
-if there's only one implementation? Isn't it just extra boilerplate?" How do you respond?
-Give at least one concrete scenario where the interface pays off.
+Interfaces improve flexibility and maintainability. Even with one implementation today, another implementation may be needed later for testing or different business logic. The interface also helps enforce a clear contract between layers.
 
+### 3.
 
+`@Enumerated(EnumType.STRING)` stores enum values as readable text such as FOOD or TRANSPORT in the database. If a new enum value is added without considering existing data and migrations, application behavior may become inconsistent. String storage is safer than ordinal values because it is easier to understand and maintain.
 
-**3.** `Category` is modelled as an enum rather than a plain `String` field on
-`Transaction`. What does storing it as `@Enumerated(EnumType.STRING)` in the database
-actually produce in the table? What would go wrong if a future developer added a new
-category value to the enum but forgot to handle database migration?
+### 4.
 
-
-
-**4.** `BudgetCalculator` is a `final` class with a private constructor and a single
-static method. What pattern is this, and why is it appropriate for this specific utility?
-In your implementation, what data structure did you use as an intermediate step before
-building the final sorted map, and why?
-
-
+This is a utility class pattern. The class is final and has a private constructor to prevent instantiation. I used a Map for grouping category totals and a LinkedHashMap for preserving the sorted order of the final results.
 
 ---
 
 ## Spring Boot & REST API Design
 
-**5.** The original `POST /api/transactions` endpoint returned a `ResponseEntity<Transaction>`
-rather than a `ResponseEntity<TransactionResponse>`. Explain specifically what was wrong
-with this. What does a DTO (data transfer object) protect against, and what risks does
-returning an entity directly introduce?
+### 5.
 
+Returning an entity directly exposes internal database structures to API consumers. A DTO provides control over what data is returned and helps prevent accidental exposure of fields. DTOs also make future API changes easier without affecting database entities.
 
+### 6.
 
-**6.** When a `POST` request arrives at `TransactionController`, describe the complete
-journey from HTTP request to database insert. Name each layer the request passes through,
-what each layer is responsible for, and what would happen if the `@Valid` annotation were
-removed from the method parameter.
+The request first reaches the controller, which validates input and forwards it to the service layer. The service handles business logic and calls the repository. The repository interacts with the database through JPA. Without `@Valid`, invalid request data could reach the service layer and cause incorrect data to be stored.
 
+### 7.
 
+Although all three annotations register beans, they communicate different responsibilities. `@RestController` handles HTTP requests, `@Service` contains business logic, and `@Repository` manages data access. This separation improves readability and maintainability.
 
-**7.** Spring Boot uses `@RestController`, `@Service`, and `@Repository` as stereotype
-annotations. They all ultimately do the same thing (register a bean). Why does Spring
-provide three different annotations instead of one? What does the distinction communicate
-to a developer reading the code?
+### 8.
 
-
-
-**8.** The `GET /api/transactions/monthly-spend` endpoint accepts `year` and `month` as
-query parameters. What HTTP status code should this endpoint return if `month=13` is
-passed? Who is responsible for validating it — the controller, the service, or Spring
-itself — and how would you implement that validation?
-
-
+The endpoint should return HTTP 400 Bad Request for an invalid month such as 13. Validation can be handled using annotations like `@Min(1)` and `@Max(12)` or custom validation logic. The controller is typically responsible for validating request parameters.
 
 ---
 
 ## Data Access & SQL
 
-**9.** `TransactionRepository` extends `JpaRepository<Transaction, Long>`. Spring Data JPA
-can generate a query from a method named `findByAccountId`. Explain the mechanism behind
-this — what is Spring doing at startup to turn that method name into SQL? When would you
-write a `@Query` annotation instead of relying on derived query methods?
+### 9.
 
+Spring Data JPA analyzes repository method names during application startup and automatically generates the required queries. For example, `findByAccountId` becomes a query that filters by accountId. I would use `@Query` when the query is too complex for method-name derivation.
 
+### 10.
 
-**10.** `calculateMonthlySpend` had a bug in the date boundary comparison. Describe the
-bug in plain language — what was the incorrect behaviour, what caused it at the code level,
-and what kind of test input reliably exposes this class of off-by-one error? Why is this
-type of bug particularly common in date/time logic?
+The bug excluded transactions occurring on the first day of the month because the code used `isAfter(startOfMonth)`. As a result, transactions exactly on the first day were ignored. This was fixed by making the comparison inclusive. Date boundary bugs are common because developers often overlook whether endpoints should be inclusive or exclusive.
 
+### 11.
 
-
-**11.** The application uses H2 in-memory for development. Describe exactly what you
-would change to point this application at a PostgreSQL database in production. Be specific:
-which files, which properties, and which Maven dependency. What is the risk of using
-`spring.jpa.hibernate.ddl-auto=create-drop` in production?
-
-
+For PostgreSQL, I would add the PostgreSQL dependency in `pom.xml` and update datasource properties in `application.properties`. The JDBC URL, username, password, and driver class would be configured for PostgreSQL. Using `ddl-auto=create-drop` in production is risky because it can delete existing data whenever the application restarts.
 
 ---
 
 ## Testing
 
-**12.** `TransactionServiceTest` uses `@Mock` on `TransactionRepository` and
-`@InjectMocks` on `TransactionServiceImpl`. Explain what Mockito is doing here. What is
-the repository being replaced with, and what does the test actually verify? What category
-of bug can this test suite catch — and what category can it not?
+### 12.
 
+Mockito replaces the real repository with a mock object. This allows testing service logic without connecting to a database. The tests verify business logic and interactions. They cannot catch database-specific issues or repository query problems.
 
+### 13.
 
-**13.** A teammate argues that because the service tests cover all the logic, there is no
-need to write controller tests. Do you agree? Describe one specific type of bug that a
-controller-level test (using `MockMvc`) would catch that the service tests in this project
-would miss entirely.
+I do not agree completely. Controller tests can verify request mappings, validation, HTTP status codes, and JSON responses. A MockMvc test could catch an incorrect endpoint mapping that service tests would never detect.
 
+### 14.
 
-
-**14.** Looking at the tests you wrote in `TransactionCandidateTest.java`: what was the
-first test you wrote, and why did you choose to start there? What does the order in which
-you wrote tests tell you about how you approached the problem?
-
-
+I focused first on understanding the existing tests and fixing the failures they exposed. The first priority was the monthly spend calculation because it directly caused a failing test. This approach helped resolve critical issues quickly and systematically.
 
 ---
 
 ## AI & Modern Engineering
 
-**15.** Describe how you used AI tools during this project. For at least two specific
-examples: what did you prompt the tool with, what did it return, and what did you change
-or reject? Identify one place where the AI output was immediately trustworthy and one
-place where it required meaningful scrutiny before you used it.
+### 15.
+
+I used ChatGPT during the project. I asked for help understanding compiler errors, implementing BudgetCalculator, and identifying why tests were failing. I accepted suggestions after verifying them through compilation and testing. AI was trustworthy for explaining concepts but required careful review when generating implementation code because syntax and logic errors were possible.
