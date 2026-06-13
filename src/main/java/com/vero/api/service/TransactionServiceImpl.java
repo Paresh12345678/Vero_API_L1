@@ -66,7 +66,7 @@ public class TransactionServiceImpl implements TransactionService {
         LocalDate endOfMonth = startOfMonth.withDayOfMonth(startOfMonth.lengthOfMonth());
 
         return repository.findAll().stream()
-                .filter(t -> t.getTransactionDate().isAfter(startOfMonth)
+                .filter(t -> !t.getTransactionDate().isBefore(startOfMonth)
                         && !t.getTransactionDate().isAfter(endOfMonth))
                 .collect(Collectors.groupingBy(
                         Transaction::getCategory,
@@ -80,6 +80,10 @@ public class TransactionServiceImpl implements TransactionService {
     }
 
     public List<Transaction> getCategoryTransactionsForMonth(Category category, int year, int month) {
-        return repository.findByCategoryAndMonth(category, year, month);
-    }
+         return repository.findByCategory(category).stream()
+         .filter(t -> t.getTransactionDate().getYear() == year)
+         .filter(t -> t.getTransactionDate().getMonthValue() == month)
+         .toList();
 }
+    }
+
